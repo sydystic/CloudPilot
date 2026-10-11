@@ -1,5 +1,5 @@
 // scripts/seed-templates.js
-// Auto-seed ALL JSON workflow templates into Supabase
+// Auto-seed ALL JSON workflow templates into Supabase database table `workflow_templates`
 
 import { createClient } from "@supabase/supabase-js";
 import fs from "fs";
@@ -12,26 +12,25 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Supabase Admin Client
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabaseUrl = process.env.SUPABASE_URL;
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-// Folder where your workflow JSON files exist
+if (!supabaseUrl || !serviceKey || supabaseUrl.includes('your-project')) {
+  console.error('\n❌ ERROR: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be configured in .env to seed templates.\n');
+  process.exit(1);
+}
+
+const supabase = createClient(supabaseUrl, serviceKey);
+
 const TEMPLATE_FOLDER = path.join(__dirname, "../workflow-templates");
 
-// ----------------------------------------------------
-// Helper: Scan folder recursively and get all JSON files
-// ----------------------------------------------------
 function getAllJsonFiles(dir) {
   let results = [];
+  if (!fs.existsSync(dir)) return results;
 
   const files = fs.readdirSync(dir);
-
   for (const file of files) {
     const fullPath = path.join(dir, file);
-
     if (fs.statSync(fullPath).isDirectory()) {
       results = results.concat(getAllJsonFiles(fullPath));
     } else if (file.endsWith(".json")) {
@@ -42,83 +41,75 @@ function getAllJsonFiles(dir) {
   return results;
 }
 
-// ----------------------------------------------------
-// Helper: Detect Category from folder name
-// ----------------------------------------------------
-function detectCategory(filePath) {
-  if (filePath.includes("aws")) return "AWS Automation";
-  if (filePath.includes("gcp")) return "Google Cloud Automation";
-  if (filePath.includes("azure")) return "Azure Automation";
+function detectCategory(filePath, name) {
+  const str = (filePath + ' ' + name).toLowerCase();
+  if (str.includes("aws") || str.includes("ec2") || str.includes("s3") || str.includes("iam")) return "AWS Automation";
+  if (str.includes("gcp") || str.includes("gcs") || str.includes("google") || str.includes("firebase")) return "Google Cloud Automation";
+  if (str.includes("azure")) return "Azure Automation";
+  if (str.includes("rag") || str.includes("ai")) return "AI Automation";
+  if (str.includes("dropbox")) return "Storage Automation";
   return "General Automation";
 }
 
-// ----------------------------------------------------
-// MAIN SEED FUNCTION
-// ----------------------------------------------------
 async function seedAllTemplates() {
-  console.log("\n🌱 Seeding ALL workflow templates...\n");
+  console.log("\n🌱 Seeding ALL workflow templates into Supabase...\n");
 
   const jsonFiles = getAllJsonFiles(TEMPLATE_FOLDER);
-
   console.log(`📂 Found ${jsonFiles.length} workflow JSON files\n`);
 
+  let count = 0;
   for (const filePath of jsonFiles) {
     try {
       const jsonRaw = fs.readFileSync(filePath, "utf8");
       const workflowJson = JSON.parse(jsonRaw);
 
-      // Template Name from workflow JSON
-      const name = workflowJson.name || path.basename(filePath);
-
-      // Generate template_id from filename
+      const name = workflowJson.name || path.basename(filePath, ".json");
       const template_id = path
         .basename(filePath)
         .replace(".json", "")
         .toLowerCase()
-        .replace(/\s+/g, "-");
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
 
-      // Detect category
-      const category = detectCategory(filePath);
-
-      // Extract node count for description
+      const category = detectCategory(filePath, name);
       const nodeCount = workflowJson.nodes?.length || 0;
 
       console.log(`📦 Uploading: ${name}`);
+      console.log(`   → Template ID: ${template_id}`);
       console.log(`   → Nodes: ${nodeCount}`);
       console.log(`   → Category: ${category}`);
 
-      // Insert into Supabase DB
       const { error } = await supabase
         .from("workflow_templates")
         .upsert(
           {
             template_id,
             name,
-            description: `Imported workflow with ${nodeCount} nodes.`,
+            description: `Imported workflow template with ${nodeCount} nodes.`,
             category,
             icon: "fa-bolt",
             template_json: workflowJson,
             required_credentials: [],
             config_fields: [],
-            tags: [category.toLowerCase()],
+            tags: [category.toLowerCase().split(' ')[0]],
             is_active: true,
           },
           { onConflict: "template_id" }
         );
 
       if (error) {
-        console.log("   ❌ Error:", error.message);
+        console.log("   ❌ DB Error:", error.message);
       } else {
         console.log("   ✅ Seeded successfully!\n");
+        count++;
       }
     } catch (err) {
-      console.log("❌ Failed:", filePath);
+      console.log("❌ Failed to parse:", filePath);
       console.log("   Reason:", err.message, "\n");
     }
   }
 
-  console.log("🎉 All templates seeded successfully!");
+  console.log(`🎉 Finished! Successfully seeded ${count}/${jsonFiles.length} templates.`);
 }
 
-// Run script
 seedAllTemplates();

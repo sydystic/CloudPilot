@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Cloud body using brand blue -->
+  <path d="M8.5 22h15a5.5 5.5 0 1 0-.47-10.98A7.5 7.5 0 0 0 8.5 14.5v.02A5 5 0 0 0 8.5 22z"
+        fill="#0075de"/>
+  <!-- White C letterform -->
+  <path d="M19.2 12.8a4.5 4.5 0 1 0 0 6.4"
+        stroke="white" stroke-width="1.8" stroke-linecap="round"
+        fill="none"/>
+</svg>

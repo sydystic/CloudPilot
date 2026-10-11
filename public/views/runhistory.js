@@ -1,4 +1,4 @@
-// public/views/runhistory.js - Global run history page (all executions)
+// public/views/runhistory.js - Notion-inspired global run history page (all executions)
 import { api, escapeHtml, formatDateTime, formatDuration } from '../api.js';
 import { setPageHeader, setTopActions } from '../ui.js';
 
@@ -35,10 +35,13 @@ export async function runHistoryView(params) {
   } catch (err) {
     grid.innerHTML = `
       <div class="empty-state" style="grid-column:1/-1">
-        <i class="fas fa-exclamation-triangle"></i>
+        <div class="empty-state-icon" style="background:rgba(239,68,68,0.08);color:#dc2626">
+          <i class="fas fa-exclamation-triangle"></i>
+        </div>
         <h3>Failed to load history</h3>
         <p>${escapeHtml(err.message)}</p>
-      </div>`;
+      </div>
+    `;
   }
 }
 
@@ -48,13 +51,16 @@ function renderHistory(executions, workflowId) {
   if (!executions.length) {
     grid.innerHTML = `
       <div class="empty-state" style="grid-column:1/-1">
-        <i class="fas fa-history"></i>
+        <div class="empty-state-icon">
+          <i class="fas fa-history"></i>
+        </div>
         <h3>No executions yet</h3>
         <p>${workflowId ? 'This workflow has not been run yet.' : 'Run a workflow to see its history here.'}</p>
         <button class="btn-create" onclick="window.location.hash='/workflows'">
           <i class="fas fa-project-diagram"></i> Go to Workflows
         </button>
-      </div>`;
+      </div>
+    `;
     return;
   }
 
@@ -75,7 +81,8 @@ function renderHistory(executions, workflowId) {
           ${executions.map((exec, i) => buildExecRow(exec, executions.length - i, !workflowId)).join('')}
         </tbody>
       </table>
-    </div>`;
+    </div>
+  `;
 }
 
 function buildExecRow(exec, num, showWorkflow) {

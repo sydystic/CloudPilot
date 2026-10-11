@@ -19,6 +19,24 @@ async function request(url, method = 'GET', body = null) {
   }
 
   if (res.status === 401) {
+    // Attempt automatic session refresh before redirecting
+    if (window.supabase) {
+      try {
+        const { data: refreshData, error: refreshErr } = await window.supabase.auth.refreshSession();
+        if (!refreshErr && refreshData?.session?.access_token) {
+          _token = refreshData.session.access_token;
+          headers['Authorization'] = `Bearer ${_token}`;
+          const retryRes = await fetch(url, opts);
+          if (retryRes.ok) {
+            const retryText = await retryRes.text().catch(() => '');
+            try { return JSON.parse(retryText); } catch { return { raw: retryText }; }
+          }
+        }
+      } catch (_) {
+        // Fall through to logout redirect
+      }
+    }
+
     window.location.href = '/login.html';
     throw new Error('Unauthorized');
   }
@@ -55,6 +73,8 @@ export const api = {
   // Credentials
   getCredentials:   ()     => request('/api/credentials'),
   addCredential:    (data) => request('/api/credentials', 'POST', data),
+  updateCredential: (id, data) => request(`/api/credentials/${id}`, 'PUT', data),
+  syncCredential:   (id)   => request(`/api/credentials/${id}/sync`, 'POST'),
   deleteCredential: (id)   => request(`/api/credentials/${id}`, 'DELETE'),
 
   // Templates

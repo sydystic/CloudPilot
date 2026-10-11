@@ -362,6 +362,8 @@ function getNodeIcon(node) {
 // LIVE RUN PANEL
 // ─────────────────────────────────────────────
 export function showLiveRunPanel(workflowId, workflowName, cardEl) {
+  const existingRow = document.getElementById(`live-panel-row-${workflowId}`);
+  if (existingRow) { existingRow.remove(); return; }
   const existing = document.getElementById(`live-panel-${workflowId}`);
   if (existing) { existing.remove(); return; }
 
@@ -374,7 +376,7 @@ export function showLiveRunPanel(workflowId, workflowName, cardEl) {
         <div class="live-pulse"></div>
         <span>Run: <strong>${escapeHtml(workflowName)}</strong></span>
       </div>
-      <button class="live-close-btn" onclick="document.getElementById('live-panel-${workflowId}').remove()">
+      <button class="live-close-btn" onclick="const r = document.getElementById('live-panel-row-${workflowId}'); if (r) r.remove(); const p = document.getElementById('live-panel-${workflowId}'); if (p) p.remove();">
         <i class="fas fa-times"></i>
       </button>
     </div>
@@ -389,7 +391,20 @@ export function showLiveRunPanel(workflowId, workflowName, cardEl) {
     <div class="live-run-steps" id="live-steps-${workflowId}" style="display:none"></div>
     <div class="live-run-footer" id="live-footer-${workflowId}"></div>`;
 
-  cardEl.insertAdjacentElement('afterend', panel);
+  if (cardEl && cardEl.tagName === 'TR') {
+    const tr = document.createElement('tr');
+    tr.id = `live-panel-row-${workflowId}`;
+    tr.className = 'live-panel-tr';
+    const td = document.createElement('td');
+    td.colSpan = cardEl.children.length || 5;
+    td.style.padding = '0';
+    td.style.border = 'none';
+    td.appendChild(panel);
+    tr.appendChild(td);
+    cardEl.insertAdjacentElement('afterend', tr);
+  } else if (cardEl) {
+    cardEl.insertAdjacentElement('afterend', panel);
+  }
   requestAnimationFrame(() => panel.classList.add('live-run-panel--visible'));
   return panel;
 }

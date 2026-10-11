@@ -4,21 +4,26 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CloudPilot — Workflow Control Center</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+  <link rel="icon" type="image/svg+xml" href="./assets/cloudpilot-mark.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" crossorigin="anonymous">
   <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./design-tokens.css" />
 </head>
 <body>
 
-  <!-- Loading Overlay -->
   <div class="loading-overlay" id="loadingOverlay">
     <div class="loader-inner">
-      <div class="loader-logo"><i class="fas fa-microchip"></i></div>
-      <div class="loader-ring"></div>
-      <div class="loader-text">CloudPilot</div>
+      <div class="loader-logo-wrap">
+        <div class="loader-logo">
+          <img src="./assets/cloudpilot-mark.svg" alt="CloudPilot" style="width:30px;height:30px;">
+        </div>
+        <div class="loader-ring"></div>
+      </div>
+      <div class="loader-wordmark">CloudPilot</div>
+      <div class="loader-text">Preparing your workspace…</div>
     </div>
   </div>
 
@@ -30,32 +35,33 @@
   <!-- Sidebar overlay (mobile backdrop) -->
   <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
-  <!-- Sidebar -->
   <aside class="sidebar" id="sidebar">
     <div class="logo-box">
-      <div class="logo-icon"><i class="fas fa-microchip"></i></div>
+      <div class="logo-icon">
+        <img src="./assets/cloudpilot-mark.svg" alt="CloudPilot" style="width:26px;height:26px;">
+      </div>
       <div class="logo-text">CloudPilot</div>
     </div>
 
     <ul class="nav-menu">
       <li class="nav-section-title">Main</li>
-      <li class="nav-item active">
+      <li class="nav-item active" data-route="/dashboard">
         <i class="fas fa-th-large"></i><span>Dashboard</span>
       </li>
-      <li class="nav-item">
+      <li class="nav-item" data-route="/workflows">
         <i class="fas fa-project-diagram"></i><span>Workflows</span>
       </li>
-      <li class="nav-item">
+      <li class="nav-item" data-route="/executions">
         <i class="fas fa-history"></i><span>Executions</span>
       </li>
-      <li class="nav-item">
+      <li class="nav-item" data-route="/templates">
         <i class="fas fa-boxes"></i><span>Templates</span>
       </li>
-      <li class="nav-item">
+      <li class="nav-item" data-route="/credentials">
         <i class="fas fa-key"></i><span>Credentials</span>
       </li>
       <li class="nav-section-title">Account</li>
-      <li class="nav-item">
+      <li class="nav-item" data-route="/settings">
         <i class="fas fa-cog"></i><span>Settings</span>
       </li>
     </ul>
@@ -82,7 +88,7 @@
       <div class="top-actions">
         <div class="search-wrapper">
           <i class="fas fa-search"></i>
-          <input type="text" id="searchInput" placeholder="Search workflows…">
+          <input type="text" id="searchInput" placeholder="Search workflows…" />
         </div>
         <button class="btn-create" onclick="window.location.hash='/templates'">
           <i class="fas fa-plus"></i> New Workflow

@@ -1,4 +1,4 @@
-// public/views/settings.js
+// public/views/settings.js - Notion-inspired settings page
 import { api, escapeHtml } from '../api.js';
 import { showToast, setPageHeader, setTopActions } from '../ui.js';
 

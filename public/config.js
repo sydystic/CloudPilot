@@ -1,36 +1,34 @@
-// config.js - Backend configuration (DO NOT expose to frontend)
-require('dotenv').config();
+// public/config.js - Safe browser-side configuration loader
+// Fetches safe, public configuration from /api/config
+// NEVER expose service role keys, encryption keys, or API keys here.
 
-module.exports = {
-  port: process.env.PORT || 4000,
+let _configCache = null;
+let _configPromise = null;
 
-  // N8N Configuration
-  n8n: {
-    url: process.env.N8N_URL,
-    apiKey: process.env.N8N_API_KEY,
-    apiEnabled: process.env.N8N_API_ENABLED === 'true',
-    authActive: process.env.N8N_API_AUTH_ACTIVE === 'true',
-    cors: {
-      allowOrigin: process.env.N8N_CORS_ALLOW_ORIGIN?.split(',') || [],
-      allowCredentials: process.env.N8N_CORS_ALLOW_CREDENTIALS === 'true'
-    }
-  },
+/**
+ * Fetches the safe public configuration from the server (/api/config)
+ * @returns {Promise<{ supabase: { url: string, anonKey: string }, demoMode: boolean, version: string }>}
+ */
+export async function getConfig() {
+  if (_configCache) return _configCache;
 
-  // Supabase Configuration
-  supabase: {
-    url: process.env.SUPABASE_URL,
-    serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,  // NEVER send to frontend
-    anonKey: process.env.SUPABASE_ANON_KEY  // Safe for frontend
-  },
+  if (!_configPromise) {
+    _configPromise = fetch('/api/config')
+      .then(async (res) => {
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.message || errData.error || `Failed to load config (${res.status})`);
+        }
+        _configCache = await res.json();
+        return _configCache;
+      })
+      .catch((err) => {
+        _configPromise = null;
+        throw err;
+      });
+  }
 
-  // Security
-  jwtSecret: process.env.JWT_SECRET || 'your-jwt-secret-change-this',
+  return _configPromise;
+}
 
-  // CORS
-  allowedOrigins: [
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
-    'http://localhost:8000',
-    'http://127.0.0.1:8000'
-  ]
-};
+export default getConfig;

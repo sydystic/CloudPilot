@@ -1,6 +1,6 @@
 // public/views/workflows.js - All Workflows page
 import { api, escapeHtml, formatDate } from '../api.js';
-import { showToast, setPageHeader, setTopActions } from '../ui.js';
+import { showToast, setPageHeader, setTopActions, updateStats, updateStatsError } from '../ui.js';
 import { runWithLivePanel } from './timeline.js';
 
 let _workflows = [];
@@ -20,16 +20,20 @@ export async function workflowsView() {
     const data = await api.getWorkflows();
     _workflows = data?.data || data?.workflows || [];
     renderWorkflowsTable(_workflows);
+    updateStats(_workflows);
   } catch (err) {
     grid.innerHTML = `
       <div class="empty-state">
-        <i class="fas fa-plug"></i>
+        <div class="empty-state-icon" style="background:rgba(239,68,68,0.08);color:#dc2626">
+          <i class="fas fa-plug"></i>
+        </div>
         <h3>Cannot reach n8n</h3>
         <p>${escapeHtml(err.message)}</p>
         <button class="btn-create" onclick="workflowsView()">
           <i class="fas fa-sync-alt"></i> Retry
         </button>
       </div>`;
+    updateStatsError(err.message);
   }
 }
 
@@ -54,11 +58,11 @@ function renderWorkflowsTable(workflows) {
       <table class="wf-table">
         <thead>
           <tr>
-            <th>Name</th>
-            <th>Status</th>
-            <th>Nodes</th>
-            <th>Updated</th>
-            <th>Actions</th>
+            <th class="col-name">Name</th>
+            <th class="col-status">Status</th>
+            <th class="col-nodes">Nodes</th>
+            <th class="col-updated">Updated</th>
+            <th class="col-actions">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -80,27 +84,29 @@ function buildTableRow(wf) {
         <strong>${name}</strong>
         <span class="wf-id">${id}</span>
       </td>
-      <td>
+      <td class="wf-table-status">
         <span class="status-badge ${wf.active ? 'active' : 'inactive'}">
           <span class="status-dot"></span>${wf.active ? 'Active' : 'Inactive'}
         </span>
       </td>
-      <td>${nodeCount}</td>
-      <td>${formatDate(wf.updatedAt)}</td>
-      <td class="wf-table-actions">
-        <button class="wf-btn primary" onclick="window._wfRun('${id}', '${safeName}', this)">
-          <i class="fas fa-play"></i> Run
-        </button>
-        <button class="wf-btn secondary" onclick="window.location.hash='/run-history/${id}'">
-          <i class="fas fa-history"></i> History
-        </button>
-        <button class="wf-btn ${wf.active ? 'warning' : 'success'}" onclick="window._wfToggle('${id}', ${!wf.active}, '${safeName}', this)">
-          <i class="fas fa-${wf.active ? 'pause' : 'play-circle'}"></i>
-          ${wf.active ? 'Deactivate' : 'Activate'}
-        </button>
-        <button class="wf-btn danger" onclick="window._wfDelete('${id}', '${safeName}')">
-          <i class="fas fa-trash"></i>
-        </button>
+      <td class="wf-table-nodes">${nodeCount}</td>
+      <td class="wf-table-updated">${formatDate(wf.updatedAt)}</td>
+      <td class="wf-table-actions-cell">
+        <div class="wf-table-actions">
+          <button class="wf-btn primary" onclick="window._wfRun('${id}', '${safeName}', this)">
+            <i class="fas fa-play"></i> Run
+          </button>
+          <button class="wf-btn secondary" onclick="window.location.hash='/run-history/${id}'">
+            <i class="fas fa-history"></i> History
+          </button>
+          <button class="wf-btn ${wf.active ? 'warning' : 'success'}" onclick="window._wfToggle('${id}', ${!wf.active}, '${safeName}', this)">
+            <i class="fas fa-${wf.active ? 'pause' : 'play-circle'}"></i>
+            ${wf.active ? 'Deactivate' : 'Activate'}
+          </button>
+          <button class="wf-btn danger" onclick="window._wfDelete('${id}', '${safeName}')" title="Delete workflow">
+            <i class="fas fa-trash"></i>
+          </button>
+        </div>
       </td>
     </tr>`;
 }
@@ -163,6 +169,7 @@ window._wfToggle = async (id, active, name, btnEl) => {
     await api.toggleWorkflow(id, active);
     const wf = _workflows.find(w => String(w.id) === String(id));
     if (wf) wf.active = active;
+    updateStats(_workflows);
     showToast(`${active ? '✅ Activated' : '⏸ Deactivated'}: ${name}`, active ? 'success' : 'info');
     renderWorkflowsTable(_workflows);
   } catch (err) {
@@ -175,6 +182,7 @@ window._wfDelete = async (id, name) => {
   try {
     await api.deleteWorkflow(id);
     _workflows = _workflows.filter(w => String(w.id) !== String(id));
+    updateStats(_workflows);
     showToast('🗑️ Workflow deleted', 'success');
     renderWorkflowsTable(_workflows);
   } catch (err) {

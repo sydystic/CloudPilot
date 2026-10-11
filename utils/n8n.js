@@ -1,12 +1,13 @@
-// utils/n8n.js - n8n API Adapter with robust error handling + diagnostics
+// utils/n8n.js - n8n API Adapter with robust error & status code handling
 import fetch from 'node-fetch';
 
 let _workingBasePath = null;
 let _detectionPromise = null;
 
 function getN8nUrl() {
-  return (process.env.N8N_URL || 'http://localhost:5678').replace(/\/$/, '');
+  return (process.env.N8N_URL || 'http://localhost:5680').replace(/\/$/, '');
 }
+
 function getN8nApiKey() {
   return process.env.N8N_API_KEY || '';
 }
@@ -38,7 +39,11 @@ export async function detectBasePath() {
       try {
         const url = `${n8nUrl}${basePath}/workflows?limit=1`;
         console.log(`🔍 Testing n8n path: ${url}`);
-        const res = await fetch(url, { method: 'GET', headers: getN8nHeaders() });
+        const res = await fetch(url, {
+          method: 'GET',
+          headers: getN8nHeaders(),
+          signal: AbortSignal.timeout(5000),
+        });
         console.log(`   ↳ ${res.status}`);
 
         if (res.status !== 404 && res.status !== 302) {
@@ -71,8 +76,7 @@ export function resetBasePath() {
 }
 
 // ─────────────────────────────────────────────
-// Core request — surfaces the REAL n8n error message
-// instead of wrapping it in a generic 502
+// Core request — surfaces status-code specific n8n error messages
 // ─────────────────────────────────────────────
 export async function n8nRequest(path, method = 'GET', body = null) {
   const basePath = await detectBasePath();
@@ -83,6 +87,7 @@ export async function n8nRequest(path, method = 'GET', body = null) {
   const options = {
     method,
     headers: getN8nHeaders(),
+    signal: AbortSignal.timeout(15000),
   };
 
   if (body && ['POST', 'PUT', 'PATCH'].includes(method)) {
@@ -93,10 +98,16 @@ export async function n8nRequest(path, method = 'GET', body = null) {
   try {
     res = await fetch(url, options);
   } catch (err) {
+    if (err.name === 'AbortError' || err.name === 'TimeoutError') {
+      throw new Error(`n8n request timed out (15s) at ${getN8nUrl()}`);
+    }
+    if (err.code === 'ECONNREFUSED') {
+      throw new Error(`n8n connection refused at ${getN8nUrl()} — is n8n running?`);
+    }
     throw new Error(`n8n unreachable at ${getN8nUrl()} — ${err.message}`);
   }
 
-  console.log(`   ↳ ${res.status}`);
+  console.log(`   ↳ HTTP ${res.status}`);
 
   if (!res.ok) {
     let errorText = '';
@@ -106,12 +117,12 @@ export async function n8nRequest(path, method = 'GET', body = null) {
       errorJson = JSON.parse(errorText);
     } catch (_) {}
 
-    const message = errorJson?.message || errorJson?.error || errorText || `HTTP ${res.status}`;
-    console.error(`   ↳ Error body: ${errorText}`);
+    const detailedMessage = errorJson?.message || errorJson?.error || errorText;
+    console.error(`   ↳ Error response:`, errorText.slice(0, 300));
 
-    // On 404 with a cached base path, retry with fresh detection
+    // Handle 404 retry if base path was cached
     if (res.status === 404 && _workingBasePath) {
-      console.log('   ↳ 404 — resetting base path and retrying...');
+      console.log('   ↳ 404 — resetting base path cache and retrying...');
       resetBasePath();
       const newBase = await detectBasePath();
       const retryUrl = `${getN8nUrl()}${newBase}${path}`;
@@ -128,15 +139,32 @@ export async function n8nRequest(path, method = 'GET', body = null) {
       const retryText = await retryRes.text().catch(() => '');
       let retryJson = null;
       try { retryJson = JSON.parse(retryText); } catch (_) {}
-      throw new Error(retryJson?.message || retryJson?.error || retryText || `HTTP ${retryRes.status}`);
+      const retryMsg = retryJson?.message || retryJson?.error || retryText;
+      throw buildFormattedN8nError(retryRes.status, retryMsg);
     }
 
-    throw new Error(message);
+    throw buildFormattedN8nError(res.status, detailedMessage);
   }
 
   const ct = res.headers.get('content-type') || '';
-  if (ct.includes('json')) return res.json();
+  if (ct.includes('json')) {
+    return res.json();
+  }
   return { success: true };
+}
+
+function buildFormattedN8nError(status, detail) {
+  let prefix = `n8n HTTP ${status}`;
+  if (status === 401) prefix = 'n8n Unauthorized (401) — check N8N_API_KEY in .env';
+  else if (status === 403) prefix = 'n8n Access Forbidden (403) — check API key permissions';
+  else if (status === 404) prefix = 'n8n Resource Not Found (404)';
+  else if (status === 409) prefix = 'n8n Resource Conflict (409)';
+  else if (status === 422) prefix = 'n8n Validation Error (422)';
+  else if (status === 429) prefix = 'n8n Rate Limit Exceeded (429)';
+  else if (status >= 500) prefix = `n8n Server Error (${status})`;
+
+  const detailText = detail && detail.trim() ? `: ${detail.trim()}` : '';
+  return new Error(`${prefix}${detailText}`);
 }
 
 // ─────────────────────────────────────────────
@@ -146,7 +174,7 @@ export async function checkN8nHealth() {
   try {
     const basePath = await detectBasePath();
     const url = `${getN8nUrl()}${basePath}/workflows?limit=1`;
-    const res = await fetch(url, { method: 'GET', headers: getN8nHeaders() });
+    const res = await fetch(url, { method: 'GET', headers: getN8nHeaders(), signal: AbortSignal.timeout(5000) });
     return {
       connected: res.ok,
       status: res.status,

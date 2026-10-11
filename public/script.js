@@ -2,7 +2,7 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 import { setToken, api } from './api.js';
 import { initRouter, defineRoute } from './router.js';
-import { setActiveNav } from './ui.js';
+import { setActiveNav, updateStats, updateStatsError } from './ui.js';
 import { dashboardView } from './views/dashboard.js';
 import { templatesView } from './views/templates.js';
 import { credentialsView } from './views/credentials.js';
@@ -97,6 +97,11 @@ async function init() {
   defineRoute('/executions', async (params) => { setActiveNav('executions'); await runHistoryView(params); });
 
   initRouter();
+
+  // Populate metrics summary cards on app load
+  api.getWorkflows()
+    .then(data => updateStats(data?.data || data?.workflows || []))
+    .catch(err => updateStatsError(err.message));
 }
 
 // ─────────────────────────────────────────────
@@ -120,23 +125,21 @@ function updateUserUI(user) {
 // NAVIGATION
 // ─────────────────────────────────────────────
 function setupNavigation() {
-  const navMap = {
-    'Dashboard': '/dashboard',
-    'Workflows': '/workflows',
-    'Executions': '/executions',
-    'Templates': '/templates',
-    'Credentials': '/credentials',
-    'Settings': '/settings',
-  };
-
   document.querySelectorAll('.nav-item').forEach(item => {
+    const route = item.dataset.route;
+    if (!route) return;
     item.addEventListener('click', (e) => {
       e.preventDefault();
-      const span = item.querySelector('span');
-      if (!span) return;
-      const text = span.textContent.trim();
-      const route = navMap[text];
-      if (route) window.location.hash = route;
+      window.location.hash = route;
+      // Close sidebar on mobile
+      const sidebar = document.getElementById('sidebar');
+      const overlay = document.getElementById('sidebarOverlay');
+      const menuToggle = document.getElementById('menuToggle');
+      if (window.innerWidth <= 768) {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('active');
+        menuToggle.innerHTML = '<i class="fas fa-bars"></i>';
+      }
     });
   });
 }

@@ -1,38 +1,57 @@
-// public/views/dashboard.js
+// public/views/dashboard.js - Notion-inspired dashboard with pagination, search, and sorting
 import { api, escapeHtml, formatDate } from '../api.js';
-import { showToast, setPageHeader, setTopActions } from '../ui.js';
+import { showToast, setPageHeader, setTopActions, updateStats, updateStatsError } from '../ui.js';
 import { runWithLivePanel } from './timeline.js';
 import { renderOnboardingChecklist, isOnboarded } from '../onboarding.js';
 
 let _allWorkflows = [];
+let _filteredWorkflows = [];
+let _searchQuery = '';
+let _currentSort = 'recent'; // recent, name, date
+let _currentStatus = 'all'; // all, active, inactive
+const ITEMS_PER_PAGE = 12;
+let _currentPage = 1;
+
 // Track last-run timestamps for sorting (in-memory, resets on page reload)
 const _lastRunAt = new Map();
 
 export async function dashboardView() {
+  // Set up top bar with search and actions
   setPageHeader('Dashboard', 'Manage and run your automation workflows');
   setTopActions(`
     <div class="search-wrapper">
       <i class="fas fa-search"></i>
-      <input type="text" id="searchInput" placeholder="Search workflows…" oninput="window._dashboardSearch(this.value)">
+      <input type="text" id="searchInput" placeholder="Search workflows…" />
     </div>
     <button class="btn-create" onclick="window.location.hash='/templates'">
       <i class="fas fa-plus"></i> New Workflow
     </button>
   `);
 
+  // Ensure the app-level boot overlay is ALWAYS hidden when any view renders
+  const overlay = document.getElementById('loadingOverlay');
+  overlay?.classList.add('hidden');
+
   const grid = document.getElementById('workflowsGrid');
-  grid.innerHTML = `<div class="loading-card"><div class="spinner-small"></div><span>Loading workflows…</span></div>`;
+  // Inline spinner — does NOT use the full-screen overlay
+  grid.innerHTML = `<div class="loading-card" style="grid-column:1/-1"><div class="spinner-small"></div><span>Loading workflows…</span></div>`;
+
+  // Setup search handler
+  setupSearch();
 
   try {
     const data = await api.getWorkflows();
-    _allWorkflows = data?.data || data?.workflows || [];
+    _allWorkflows = normalizeWorkflowData(data);
+    _filteredWorkflows = [..._allWorkflows];
     updateStats(_allWorkflows);
-    await renderDashboardContent(_sortWorkflows(_allWorkflows));
-    setupSearch();
+    grid.innerHTML = ''; // clear spinner before rendering cards
+    await renderDashboardContent();
   } catch (err) {
     grid.innerHTML = `
-      <div class="empty-state">
-        <i class="fas fa-plug"></i>
+      <div class="empty-state" style="grid-column:1/-1">
+        <div class="empty-state-icon" style="background:rgba(239,68,68,0.08);color:#dc2626">
+          <i class="fas fa-plug"></i>
+        </div>
         <h3>Cannot reach n8n</h3>
         <p>${escapeHtml(err.message)}</p>
         <button class="btn-create" onclick="window.location.hash='/dashboard'">
@@ -42,78 +61,133 @@ export async function dashboardView() {
     updateStatsError();
   }
 
-  // Refresh stats after execution completes
-  window.removeEventListener('cloudpilot:execution-complete', window._dashRefreshHandler);
+  // Deduplicate execution-complete event listener
+  if (window._dashRefreshHandler) {
+    window.removeEventListener('cloudpilot:execution-complete', window._dashRefreshHandler);
+  }
   window._dashRefreshHandler = () => {
-    api.getWorkflows().then(data => {
-      _allWorkflows = data?.data || data?.workflows || [];
-      updateStats(_allWorkflows);
-    }).catch(() => { });
+    api.getWorkflows()
+      .then(data => {
+        _allWorkflows = normalizeWorkflowData(data);
+        updateStats(_allWorkflows);
+      })
+      .catch(() => {});
   };
   window.addEventListener('cloudpilot:execution-complete', window._dashRefreshHandler);
 }
 
-// Sort: recently-run first, then by name
-function _sortWorkflows(workflows) {
-  return [...workflows].sort((a, b) => {
-    const aRun = _lastRunAt.get(String(a.id)) || 0;
-    const bRun = _lastRunAt.get(String(b.id)) || 0;
-    if (aRun !== bRun) return bRun - aRun;
-    return (a.name || '').localeCompare(b.name || '');
-  });
+function normalizeWorkflowData(data) {
+  // Handle both array format and object { data: [...], workflows: [...] }
+  const workflows = data?.data || data?.workflows || data || [];
+  return Array.isArray(workflows) ? workflows.map(wf => ({
+    id: String(wf.id || wf.workflow_id || ''),
+    name: wf.name || 'Unnamed Workflow',
+    description: wf.description || '',
+    nodes: Array.isArray(wf.nodes) ? wf.nodes : [],
+    active: Boolean(wf.active ?? wf.isActive ?? false),
+    createdAt: wf.createdAt || wf.created_at,
+    updatedAt: wf.updatedAt || wf.updated_at,
+    lastRunAt: _lastRunAt.get(String(wf.id || wf.workflow_id)) || null,
+    error: null
+  })) : [];
 }
 
-async function renderDashboardContent(workflows) {
+async function renderDashboardContent() {
   const grid = document.getElementById('workflowsGrid');
+  // Always start fresh to prevent duplicate cards on re-render (e.g. pagination change)
   grid.innerHTML = '';
 
-  // Onboarding checklist
-  const onboardingContainer = document.createElement('div');
-  onboardingContainer.id = 'onboardingContainer';
-  onboardingContainer.style.cssText = 'grid-column:1/-1';
-  grid.appendChild(onboardingContainer);
+  // Onboarding checklist (only if not onboarded)
   if (!isOnboarded()) {
+    const onboardingContainer = document.createElement('div');
+    onboardingContainer.id = 'onboardingContainer';
+    onboardingContainer.style.cssText = 'grid-column:1/-1';
+    grid.appendChild(onboardingContainer);
     await renderOnboardingChecklist(onboardingContainer);
   }
 
-  if (!workflows.length) {
+  const paginated = getPaginatedItems(_filteredWorkflows);
+  if (!paginated.items.length) {
     const emptyEl = document.createElement('div');
     emptyEl.className = 'empty-state';
     emptyEl.style.gridColumn = '1 / -1';
     emptyEl.innerHTML = `
-      <i class="fas fa-project-diagram"></i>
-      <h3>No workflows yet</h3>
-      <p>Import a template to get started with your first automation</p>
-      <button class="btn-create" onclick="window.location.hash='/templates'">
+      <div class="empty-state-icon">
+        <i class="fas fa-cloud"></i>
+      </div>
+      <h3>No workflows found</h3>
+      <p>${_searchQuery ? 'No workflows match your search.' : 'Import a template to get started with your first automation'}</p>
+      ${_searchQuery ? '' : `<button class="btn-create" onclick="window.location.hash='/templates'">
         <i class="fas fa-boxes"></i> Browse Templates
-      </button>`;
+      </button>`}
+    `;
     grid.appendChild(emptyEl);
     return;
   }
 
-  workflows.forEach(wf => {
+  // Render cards
+  paginated.items.forEach(wf => {
     const cardEl = document.createElement('div');
     cardEl.innerHTML = buildWorkflowCard(wf);
     grid.appendChild(cardEl.firstElementChild);
   });
+
+  // Add pagination if needed
+  if (paginated.totalPages > 1) {
+    renderPagination(grid, paginated);
+  }
 }
 
-function updateStats(workflows) {
-  const total = workflows.length;
-  const active = workflows.filter(w => w.active).length;
-  const el = (id) => document.getElementById(id);
-  if (el('totalWorkflows')) el('totalWorkflows').textContent = total;
-  if (el('activeWorkflows')) el('activeWorkflows').textContent = active;
-  if (el('inactiveWorkflows')) el('inactiveWorkflows').textContent = total - active;
-  if (el('systemStatus')) el('systemStatus').textContent = 'Online';
-  if (el('lastSync')) el('lastSync').textContent = `Synced ${new Date().toLocaleTimeString()}`;
+function getPaginatedItems(items) {
+  const startIndex = (_currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const paginatedItems = items.slice(startIndex, endIndex);
+  const totalPages = Math.ceil(items.length / ITEMS_PER_PAGE);
+  return { items: paginatedItems, totalPages, currentPage: _currentPage };
 }
 
-function updateStatsError() {
-  const el = (id) => document.getElementById(id);
-  if (el('systemStatus')) el('systemStatus').textContent = 'Offline';
-  if (el('lastSync')) el('lastSync').textContent = 'Failed to sync';
+function renderPagination(grid, paginated) {
+  const paginationContainer = document.createElement('div');
+  paginationContainer.className = 'pagination';
+  paginationContainer.style.gridColumn = '1 / -1';
+
+  const buttons = [];
+  for (let i = 1; i <= paginated.totalPages; i++) {
+    const btn = document.createElement('button');
+    btn.className = 'pagination-btn' + (i === paginated.currentPage ? ' active' : '');
+    btn.textContent = i;
+    btn.addEventListener('click', () => {
+      _currentPage = i;
+      renderDashboardContent();
+    });
+    buttons.push(btn);
+  }
+
+  paginationContainer.appendChild(document.createElement('nav')).append(...buttons);
+  grid.appendChild(paginationContainer);
 }
+
+// Sort: recently-run first, then by name
+function getSortedItems() {
+  return [..._filteredWorkflows].sort((a, b) => {
+    if (_currentSort === 'name') {
+      return (a.name || '').localeCompare(b.name || '');
+    }
+    if (_currentSort === 'date') {
+      const aDate = new Date(a.updatedAt || a.createdAt || 0);
+      const bDate = new Date(b.updatedAt || b.createdAt || 0);
+      return bDate - aDate;
+    }
+    // 'recent' - recently run first
+    const aRun = _lastRunAt.get(String(a.id)) || 0;
+    const bRun = _lastRunAt.get(String(b.id)) || 0;
+    if (aRun !== bRun) return bRun - aRun;
+    const aDate = new Date(a.updatedAt || a.createdAt || 0);
+    const bDate = new Date(b.updatedAt || b.createdAt || 0);
+    return bDate - aDate;
+  });
+}
+
 
 function buildWorkflowCard(wf) {
   const nodeCount = (wf.nodes || []).length;
@@ -135,6 +209,8 @@ function buildWorkflowCard(wf) {
         </label>
       </div>
 
+      ${wf.description ? `<p class="wf-description">${escapeHtml(wf.description)}</p>` : ''}
+
       <div class="wf-meta">
         <div class="meta-item">
           <i class="fas fa-clock"></i>
@@ -145,7 +221,7 @@ function buildWorkflowCard(wf) {
           <span>${nodeCount} node${nodeCount !== 1 ? 's' : ''}</span>
         </div>
         ${wasRecentlyRun ? `
-        <div class="meta-item" style="color:var(--primary)">
+        <div class="meta-item" style="color:var(--color-primary)">
           <i class="fas fa-bolt" style="opacity:1"></i>
           <span style="font-weight:600">Just run</span>
         </div>` : ''}
@@ -165,12 +241,12 @@ function buildWorkflowCard(wf) {
           <i class="fas fa-play"></i> Run
         </button>
         <button class="wf-btn secondary"
-          onclick="window.location.hash='/run-history/${id}'">
+          onclick="window.location.hash='/executions/${id}'">
           <i class="fas fa-history"></i> History
         </button>
         <button class="wf-btn danger" title="Delete workflow"
           onclick="window._deleteWorkflow('${id}', '${safeName}')">
-          <i class="fas fa-trash"></i>
+          <i class="fas fa-trash"></i> Delete
         </button>
       </div>
     </div>`;
@@ -178,34 +254,20 @@ function buildWorkflowCard(wf) {
 
 function setupSearch() {
   window._dashboardSearch = (query) => {
-    const q = query.toLowerCase().trim();
-    const filtered = q
-      ? _allWorkflows.filter(wf =>
+    _searchQuery = query.trim().toLowerCase();
+    _currentPage = 1;
+
+    const q = _searchQuery;
+    if (q) {
+      _filteredWorkflows = _allWorkflows.filter(wf =>
         (wf.name || '').toLowerCase().includes(q) ||
+        (wf.description || '').toLowerCase().includes(q) ||
         String(wf.id).toLowerCase().includes(q)
-      )
-      : _allWorkflows;
-
-    const grid = document.getElementById('workflowsGrid');
-    grid.querySelectorAll('.wf-card').forEach(c => c.remove());
-
-    if (!filtered.length) {
-      const emptyEl = document.createElement('div');
-      emptyEl.className = 'empty-state';
-      emptyEl.style.gridColumn = '1 / -1';
-      emptyEl.innerHTML = `
-        <i class="fas fa-search"></i>
-        <h3>No workflows match "${escapeHtml(q)}"</h3>
-        <p>Try a different search term</p>`;
-      grid.appendChild(emptyEl);
-      return;
+      );
+    } else {
+      _filteredWorkflows = [..._allWorkflows];
     }
-
-    _sortWorkflows(filtered).forEach(wf => {
-      const cardEl = document.createElement('div');
-      cardEl.innerHTML = buildWorkflowCard(wf);
-      grid.appendChild(cardEl.firstElementChild);
-    });
+    renderDashboardContent();
   };
 }
 
@@ -253,6 +315,12 @@ function _promoteCard(id) {
   if (anchor && anchor !== card && anchor.nextSibling !== card) {
     grid.insertBefore(card, anchor.nextSibling);
   }
+
+  // Refresh after animations complete
+  setTimeout(() => {
+    _currentPage = 1;
+    renderDashboardContent();
+  }, 300);
 }
 
 // ─────────────────────────────────────────────
@@ -303,7 +371,12 @@ window._deleteWorkflow = async (id, name) => {
       card.style.transition = 'opacity 0.2s, transform 0.2s';
       card.style.opacity = '0';
       card.style.transform = 'scale(0.97)';
-      setTimeout(() => { card.remove(); updateStats(_allWorkflows); }, 220);
+      setTimeout(() => {
+        card.remove();
+        _currentPage = 1;
+        renderDashboardContent();
+        updateStats(_allWorkflows);
+      }, 220);
     }
     showToast(`"${name}" deleted`, 'info');
   } catch (err) {

@@ -1,10 +1,17 @@
-// routes/templates.js
+// routes/templates.js - Workflow Template Marketplace API
 import { Router } from 'express';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { requireAuth } from '../middleware/auth.js';
 import { getSupabaseAdmin } from '../utils/supabase.js';
 import { n8nRequest } from '../utils/n8n.js';
 import { getDecryptedCredential } from './credentials.js';
 import { DEMO_TEMPLATES } from '../utils/demo.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const LOCAL_TEMPLATES_DIR = path.join(__dirname, '../workflow-templates');
 
 const router = Router();
 router.use(requireAuth);
@@ -21,42 +28,54 @@ const N8N_CRED_TYPE_MAP = {
   http: 'httpBasicAuth',
 };
 
+// ─────────────────────────────────────────────
 // GET /api/templates
-// Lists all workflow JSON files from Supabase Storage bucket "workflow_templates"
+// Lists templates from Supabase DB table `workflow_templates`,
+// falling back to Storage bucket `workflow_templates` or local files.
+// ─────────────────────────────────────────────
 router.get('/', async (req, res) => {
   if (process.env.DEMO_MODE === 'true') return res.json({ templates: DEMO_TEMPLATES });
 
   try {
     const supabase = getSupabaseAdmin();
 
+    // 1. Try fetching from Supabase DB table 'workflow_templates'
+    const { data: dbTemplates, error: dbErr } = await supabase
+      .from('workflow_templates')
+      .select('*')
+      .eq('is_active', true)
+      .order('name', { ascending: true });
+
+    if (!dbErr && dbTemplates && dbTemplates.length > 0) {
+      const templates = dbTemplates.map(t => ({
+        id: t.template_id || t.id,
+        template_id: t.template_id || t.id,
+        name: t.name,
+        description: t.description || '',
+        category: t.category || detectCategory(t.name, t.template_json?.nodes || []),
+        node_count: (t.template_json?.nodes || []).length,
+        tags: t.tags || extractTags(t.name, t.template_json?.nodes || []),
+        required_credentials: t.required_credentials || [],
+        storage_path: t.template_id,
+      }));
+      return res.json({ templates });
+    }
+
+    // 2. Try storage bucket 'workflow_templates'
     const { data: files, error: listErr } = await supabase
       .storage
-      .from('workflows_templates')
+      .from('workflow_templates')
       .list('', { limit: 200, sortBy: { column: 'name', order: 'asc' } });
 
-    if (listErr) throw new Error('Storage list failed: ' + listErr.message);
-    if (!files || files.length === 0) return res.json({ templates: [] });
+    if (!listErr && files && files.length > 0) {
+      const jsonFiles = files.filter(f => f.name && f.name.endsWith('.json'));
+      const templates = [];
 
-    const jsonFiles = files.filter(f => f.name && f.name.endsWith('.json') && f.id);
-
-    const BATCH = 20;
-    const templates = [];
-
-    for (let i = 0; i < jsonFiles.length; i += BATCH) {
-      const batch = jsonFiles.slice(i, i + BATCH);
-      const results = await Promise.allSettled(
-        batch.map(async (file) => {
-          const { data: blob, error: dlErr } = await supabase
-            .storage
-            .from('workflows_templates')
-            .download(file.name);
-
-          if (dlErr) throw new Error(`Download failed for ${file.name}: ${dlErr.message}`);
-          let json;
-          try { json = JSON.parse(await blob.text()); }
-          catch (_) { throw new Error(`Invalid JSON in ${file.name}`); }
-
-          return {
+      for (const file of jsonFiles) {
+        try {
+          const { data: blob } = await supabase.storage.from('workflow_templates').download(file.name);
+          const json = JSON.parse(await blob.text());
+          templates.push({
             id: file.name,
             template_id: file.name,
             name: json.name || file.name.replace(/\.json$/i, ''),
@@ -66,23 +85,54 @@ router.get('/', async (req, res) => {
             tags: extractTags(json.name || file.name, json.nodes || []),
             required_credentials: [],
             storage_path: file.name,
-          };
-        })
-      );
+          });
+        } catch (_) {}
+      }
 
-      for (const result of results) {
-        if (result.status === 'fulfilled') templates.push(result.value);
-        else console.warn('Template parse error:', result.reason?.message);
+      if (templates.length > 0) {
+        templates.sort((a, b) => a.name.localeCompare(b.name));
+        return res.json({ templates });
       }
     }
 
-    templates.sort((a, b) => a.name.localeCompare(b.name));
-    res.json({ templates });
+    // 3. Fallback to local files in workflow-templates directory
+    const localTemplates = loadLocalTemplates();
+    res.json({ templates: localTemplates });
+
   } catch (err) {
-    console.error('GET /api/templates error:', err.message);
-    res.status(500).json({ error: err.message });
+    console.warn('GET /api/templates fallback to local files:', err.message);
+    const localTemplates = loadLocalTemplates();
+    res.json({ templates: localTemplates });
   }
 });
+
+function loadLocalTemplates() {
+  const templates = [];
+  try {
+    if (fs.existsSync(LOCAL_TEMPLATES_DIR)) {
+      const files = fs.readdirSync(LOCAL_TEMPLATES_DIR).filter(f => f.endsWith('.json'));
+      for (const file of files) {
+        try {
+          const raw = fs.readFileSync(path.join(LOCAL_TEMPLATES_DIR, file), 'utf8');
+          const json = JSON.parse(raw);
+          templates.push({
+            id: file,
+            template_id: file,
+            name: json.name || file.replace(/\.json$/i, ''),
+            description: json.meta?.description || json.description || `Workflow template with ${(json.nodes || []).length} nodes`,
+            category: detectCategory(json.name || file, json.nodes || []),
+            node_count: (json.nodes || []).length,
+            tags: extractTags(json.name || file, json.nodes || []),
+            required_credentials: [],
+            storage_path: file,
+          });
+        } catch (_) {}
+      }
+    }
+  } catch (_) {}
+  templates.sort((a, b) => a.name.localeCompare(b.name));
+  return templates;
+}
 
 function detectCategory(name, nodes) {
   const n = (name || '').toUpperCase();
@@ -92,7 +142,7 @@ function detectCategory(name, nodes) {
   if (n.includes('DROPBOX')) return 'Storage';
   if (n.includes('SLACK')) return 'Messaging';
   if (n.includes('RAG') || n.includes('AI') || n.includes('OPENAI')) return 'AI';
-  const types = nodes.map(nd => (nd.type || '').toLowerCase()).join(' ');
+  const types = (nodes || []).map(nd => (nd.type || '').toLowerCase()).join(' ');
   if (types.includes('aws')) return 'AWS';
   if (types.includes('google')) return 'GCP';
   if (types.includes('slack')) return 'Messaging';
@@ -111,7 +161,7 @@ function extractTags(name, nodes) {
   if (n.includes('rag') || n.includes('ai')) tags.add('ai');
   if (n.includes('dropbox')) tags.add('storage');
   if (n.includes('firebase')) tags.add('database');
-  for (const node of nodes) {
+  for (const node of (nodes || [])) {
     const t = (node.type || '').toLowerCase();
     if (t.includes('slack')) tags.add('slack');
     if (t.includes('gmail') || t.includes('email')) tags.add('email');
@@ -120,7 +170,9 @@ function extractTags(name, nodes) {
   return [...tags].slice(0, 5);
 }
 
+// ─────────────────────────────────────────────
 // POST /api/templates/install-from-storage
+// ─────────────────────────────────────────────
 router.post('/install-from-storage', async (req, res) => {
   const { storage_path, workflow_name } = req.body;
   if (!storage_path) return res.status(400).json({ error: 'storage_path is required' });
@@ -129,21 +181,12 @@ router.post('/install-from-storage', async (req, res) => {
   const supabase = getSupabaseAdmin();
 
   try {
-    const { data: fileData, error: dlErr } = await supabase
-      .storage.from('workflow_templates').download(storage_path);
-    if (dlErr) throw new Error('Storage download failed: ' + dlErr.message);
-
-    let rawJson;
-    try { rawJson = JSON.parse(await fileData.text()); }
-    catch (_) { throw new Error('Invalid JSON in storage file'); }
-
+    const rawJson = await resolveTemplateJson(storage_path, supabase);
     const finalName = (workflow_name || '').trim() || rawJson.name || 'Imported Workflow';
 
-    // Strict sanitize then inject trigger
     const sanitized = sanitizeWorkflow(rawJson, finalName);
     const workflowJson = injectCloudPilotTrigger(sanitized);
 
-    // Build the payload sent to n8n — only the 4 allowed fields
     const n8nPayload = {
       name: workflowJson.name,
       nodes: workflowJson.nodes,
@@ -154,7 +197,6 @@ router.post('/install-from-storage', async (req, res) => {
     const n8nWorkflow = await n8nRequest('/workflows', 'POST', n8nPayload);
     if (!n8nWorkflow?.id) throw new Error('n8n did not return a workflow ID');
 
-    // Activate so webhook is live
     try { await n8nRequest('/workflows/' + n8nWorkflow.id + '/activate', 'POST'); }
     catch (e) { console.warn('Activate failed:', e.message); }
 
@@ -177,7 +219,7 @@ router.post('/install-from-storage', async (req, res) => {
         success: true,
         workflow: { id: String(n8nWorkflow.id), n8n_id: n8nWorkflow.id, name: finalName },
         webhook_url: webhookUrl,
-        warning: 'Workflow created but could not save to database',
+        warning: 'Workflow created but could not save to database: ' + uwErr.message,
       });
     }
 
@@ -192,8 +234,9 @@ router.post('/install-from-storage', async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────
 // POST /api/templates/import
-// template_id is the storage file path
+// ─────────────────────────────────────────────
 router.post('/import', async (req, res) => {
   const { template_id, workflow_name, credential_mappings = {} } = req.body;
   if (!template_id) return res.status(400).json({ error: 'template_id is required' });
@@ -207,15 +250,8 @@ router.post('/import', async (req, res) => {
   const supabase = getSupabaseAdmin();
 
   try {
-    const { data: fileData, error: dlErr } = await supabase
-      .storage.from('workflow_templates').download(template_id);
-    if (dlErr) throw new Error('Storage download failed: ' + dlErr.message);
+    const rawJson = await resolveTemplateJson(template_id, supabase);
 
-    let rawJson;
-    try { rawJson = JSON.parse(await fileData.text()); }
-    catch (_) { throw new Error('Invalid JSON in storage file'); }
-
-    // Credential handling
     const n8nCredIds = {};
     for (const [credType, credId] of Object.entries(credential_mappings)) {
       if (!credId) continue;
@@ -235,7 +271,6 @@ router.post('/import', async (req, res) => {
     const sanitized = sanitizeWorkflow(rawJson, finalName);
     const workflowJson = injectCloudPilotTrigger(sanitized);
 
-    // Inject credential IDs into nodes
     if (Object.keys(n8nCredIds).length > 0) {
       workflowJson.nodes = workflowJson.nodes.map(node => {
         if (node.credentials) {
@@ -250,7 +285,6 @@ router.post('/import', async (req, res) => {
       });
     }
 
-    // Build the payload sent to n8n — only the 4 allowed fields
     const n8nPayload = {
       name: workflowJson.name,
       nodes: workflowJson.nodes,
@@ -300,17 +334,53 @@ router.post('/import', async (req, res) => {
   }
 });
 
-// ─── HELPERS ────────────────────────────────
+// Helper: resolve template JSON from DB -> Storage -> Local File
+async function resolveTemplateJson(templateId, supabase) {
+  // 1. Check DB table workflow_templates
+  try {
+    const { data: dbRow } = await supabase
+      .from('workflow_templates')
+      .select('template_json')
+      .or(`template_id.eq.${templateId},id.eq.${templateId}`)
+      .maybeSingle();
 
-// Strictly sanitize workflow JSON for n8n POST /workflows.
-// n8n ONLY accepts: name, nodes, connections, settings
-// Removes ALL other top-level fields (id, active, tags, versionId, meta,
-// pinData, staticData, createdAt, updatedAt, etc.)
-// Also removes "id" from every node object.
+    if (dbRow?.template_json) return dbRow.template_json;
+  } catch (_) {}
+
+  // 2. Check Storage bucket 'workflow_templates'
+  try {
+    const { data: blob } = await supabase.storage.from('workflow_templates').download(templateId);
+    if (blob) return JSON.parse(await blob.text());
+  } catch (_) {}
+
+  // 3. Check local file
+  const sanitizeName = path.basename(templateId);
+  const possiblePaths = [
+    path.join(LOCAL_TEMPLATES_DIR, sanitizeName),
+    path.join(LOCAL_TEMPLATES_DIR, sanitizeName + '.json'),
+  ];
+
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      return JSON.parse(fs.readFileSync(p, 'utf8'));
+    }
+  }
+
+  // Find partial match in local folder
+  if (fs.existsSync(LOCAL_TEMPLATES_DIR)) {
+    const files = fs.readdirSync(LOCAL_TEMPLATES_DIR);
+    const match = files.find(f => f.toLowerCase().includes(templateId.toLowerCase().replace('.json', '')));
+    if (match) {
+      return JSON.parse(fs.readFileSync(path.join(LOCAL_TEMPLATES_DIR, match), 'utf8'));
+    }
+  }
+
+  throw new Error(`Template "${templateId}" not found in database, storage, or local templates directory`);
+}
+
 function sanitizeWorkflow(raw, name) {
   const wf = JSON.parse(JSON.stringify(raw));
 
-  // Only keep valid settings fields — strip any unknown sub-fields
   const rawSettings = (wf.settings && typeof wf.settings === 'object') ? wf.settings : {};
   const settings = {};
   if (rawSettings.executionOrder) settings.executionOrder = rawSettings.executionOrder;
@@ -320,14 +390,12 @@ function sanitizeWorkflow(raw, name) {
   if (rawSettings.callerPolicy) settings.callerPolicy = rawSettings.callerPolicy;
   if (rawSettings.errorWorkflow) settings.errorWorkflow = rawSettings.errorWorkflow;
   if (rawSettings.timezone) settings.timezone = rawSettings.timezone;
-  // Always ensure executionOrder is set
+
   if (!settings.executionOrder) settings.executionOrder = 'v1';
-  // Always ensure executions are saved
   settings.saveManualExecutions = true;
   settings.saveDataSuccessExecution = 'all';
   settings.saveDataErrorExecution = 'all';
 
-  // Strip id from every node; ensure valid position
   const nodes = (Array.isArray(wf.nodes) ? wf.nodes : []).map(node => {
     const n = { ...node };
     delete n.id;
@@ -335,7 +403,6 @@ function sanitizeWorkflow(raw, name) {
     return n;
   });
 
-  // Return ONLY the four fields n8n accepts — nothing else
   return {
     name: (name && name.trim()) || wf.name || 'Imported Workflow',
     nodes,
@@ -344,17 +411,6 @@ function sanitizeWorkflow(raw, name) {
   };
 }
 
-// Inject a CloudPilot webhook trigger that fully connects to the workflow.
-//
-// Rules:
-//   1. If workflow already has a webhook trigger — skip injection, use it as-is.
-//   2. If workflow has a manual trigger — add webhook + wire both to entry node directly.
-//      (No merge node needed; n8n runs whichever trigger fires.)
-//   3. If workflow has no triggers at all — add webhook + manual trigger + Merge node.
-//      Merge mode "passThrough" passes data from whichever input arrives first.
-//
-// Critical: responseMode must be 'responseNode' (not 'onReceived') so the webhook
-// does NOT stop execution after the trigger — data flows through to all downstream nodes.
 function injectCloudPilotTrigger(wf) {
   const nodes = [...(wf.nodes || [])];
   const connections = JSON.parse(JSON.stringify(wf.connections || {}));
@@ -367,12 +423,10 @@ function injectCloudPilotTrigger(wf) {
   ];
   const ALL_TRIGGER_TYPES = [...WEBHOOK_TYPES, ...MANUAL_TYPES];
 
-  // Already has a webhook trigger — nothing to do
   if (nodes.some(n => WEBHOOK_TYPES.includes(n.type))) {
     return { ...wf, nodes, connections };
   }
 
-  // Layout helpers
   const minX = nodes.length > 0
     ? Math.min(...nodes.map(n => (Array.isArray(n.position) ? n.position[0] : 250)))
     : 250;
@@ -382,8 +436,6 @@ function injectCloudPilotTrigger(wf) {
 
   const hasManual = nodes.some(n => MANUAL_TYPES.includes(n.type));
 
-  // Find the true entry node: a non-trigger node with no incoming connections.
-  // This is the first action node data should flow into.
   const connectedNodes = new Set();
   for (const srcConns of Object.values(connections)) {
     if (!srcConns || typeof srcConns !== 'object') continue;
@@ -397,23 +449,16 @@ function injectCloudPilotTrigger(wf) {
     }
   }
 
-  // Entry node = first non-trigger with no incoming connections
   const entryNode = nodes.find(n =>
     !ALL_TRIGGER_TYPES.includes(n.type) && !connectedNodes.has(n.name)
   );
 
-  // Fallback: if all nodes have incoming connections (e.g. circular or all connected),
-  // pick the first non-trigger node
   const firstActionNode = entryNode
     || nodes.find(n => !ALL_TRIGGER_TYPES.includes(n.type))
     || nodes[0];
 
   const webhookPath = 'cp-' + Math.random().toString(36).slice(2, 10);
 
-  // CRITICAL: use responseMode 'responseNode' so n8n does NOT stop execution
-  // at the webhook node — data must flow through to all downstream nodes.
-  // 'onReceived' causes execution to stop after the webhook, which is why
-  // workflows only ran to the 3rd node.
   const cloudPilotTrigger = {
     parameters: {
       httpMethod: 'POST',
@@ -431,13 +476,10 @@ function injectCloudPilotTrigger(wf) {
   nodes.unshift(cloudPilotTrigger);
 
   if (hasManual && firstActionNode) {
-    // Manual trigger already present — wire CloudPilot Trigger directly to first action node.
-    // Also wire the existing manual trigger to the same node (it may already be wired).
     connections['CloudPilot Trigger'] = {
       main: [[{ node: firstActionNode.name, type: 'main', index: 0 }]],
     };
   } else if (firstActionNode) {
-    // No manual trigger — add one + a Merge node so both paths are runnable.
     const manualTrigger = {
       parameters: {},
       name: 'Manual Trigger',
@@ -446,7 +488,6 @@ function injectCloudPilotTrigger(wf) {
       position: [minX - 440, avgY + 110],
     };
 
-    // Merge node: passThrough passes whichever input arrives first straight through.
     const mergeNode = {
       parameters: { mode: 'passThrough', output: 'input1' },
       name: 'Merge Triggers',
@@ -470,19 +511,14 @@ function injectCloudPilotTrigger(wf) {
 
     wf._manualTriggerInjected = true;
   } else {
-    // No downstream nodes found — wire to empty output
     connections['CloudPilot Trigger'] = { main: [[]] };
   }
 
-  // Return only the four fields n8n accepts — no _manualTriggerInjected leaks through
   return {
     name: wf.name,
     nodes,
     connections,
     settings: wf.settings,
-    // Carry _manualTriggerInjected as a non-enumerable-style side channel
-    // (it's used by the caller for the response, stripped before POST to n8n
-    //  because the POST body is built from only name/nodes/connections/settings)
     _manualTriggerInjected: wf._manualTriggerInjected || false,
   };
 }

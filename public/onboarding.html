@@ -51,10 +51,9 @@
   /* Logo row */
   .onb-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 26px; }
   .onb-logo-icon {
-    width: 40px; height: 40px;
-    background: linear-gradient(135deg, var(--primary), var(--primary-light));
-    border-radius: 10px; display: flex; align-items: center; justify-content: center;
-    font-size: 18px; color: #fff; box-shadow: 0 0 20px rgba(99,102,241,0.35);
+    width: 36px; height: 36px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
   }
   .onb-logo-text { font-size: 20px; font-weight: 700; color: #d0d8ef; letter-spacing: -0.3px; }
 
@@ -330,7 +329,7 @@
 <div class="onb-wrap">
 
   <div class="onb-logo">
-    <div class="onb-logo-icon"><i class="fas fa-microchip"></i></div>
+    <div class="onb-logo-icon"><img src="./assets/cloudpilot-mark.svg" alt="CloudPilot" style="width:28px;height:28px;"></div>
     <span class="onb-logo-text">CloudPilot</span>
   </div>
 

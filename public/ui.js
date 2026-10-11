@@ -1,4 +1,4 @@
-// public/ui.js - Shared UI utilities
+// public/ui.js - Notion-inspired Shared UI utilities
 
 export function showModal(title, content) {
   document.getElementById('modalTitle').textContent = title;
@@ -83,7 +83,7 @@ export function showToast(message, type = 'info', duration = 3500) {
 }
 
 // ─────────────────────────────────────────────
-// Active nav
+// Active nav - Notion-style active state
 // ─────────────────────────────────────────────
 export function setActiveNav(routeName) {
   document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
@@ -91,7 +91,7 @@ export function setActiveNav(routeName) {
   const navMap = {
     dashboard:    'Dashboard',
     workflows:    'Workflows',
-    'run-history':'Executions',
+    'run-history': 'Executions',
     executions:   'Run History',
     templates:    'Templates',
     credentials:  'Credentials',
@@ -108,4 +108,40 @@ export function setActiveNav(routeName) {
       item.classList.add('active');
     }
   });
+}
+
+// ─────────────────────────────────────────────
+// Summary Metric Cards (Total, Active, Inactive, System Status)
+// ─────────────────────────────────────────────
+export function updateStats(workflows) {
+  const list = Array.isArray(workflows) ? workflows : (workflows?.data || workflows?.workflows || []);
+  const total = list.length;
+  const active = list.filter(w => Boolean(w.active ?? w.isActive)).length;
+  const inactive = Math.max(0, total - active);
+  const el = (id) => document.getElementById(id);
+
+  if (el('totalWorkflows')) el('totalWorkflows').textContent = total;
+  if (el('activeWorkflows')) el('activeWorkflows').textContent = active;
+  if (el('inactiveWorkflows')) el('inactiveWorkflows').textContent = inactive;
+  if (el('systemStatus')) {
+    el('systemStatus').textContent = 'Online';
+    el('systemStatus').style.color = '';
+  }
+  if (el('lastSync')) {
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    el('lastSync').textContent = `Synced ${timeStr}`;
+    el('lastSync').style.color = '';
+  }
+}
+
+export function updateStatsError(msg) {
+  const el = (id) => document.getElementById(id);
+  if (el('systemStatus')) {
+    el('systemStatus').textContent = 'Offline';
+    el('systemStatus').style.color = '#dc2626';
+  }
+  if (el('lastSync')) {
+    el('lastSync').textContent = msg ? (msg.length > 25 ? 'Failed to sync' : msg) : 'Failed to sync';
+    el('lastSync').style.color = '#dc2626';
+  }
 }

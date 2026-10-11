@@ -30,6 +30,8 @@ export function initRouter() {
     if (!handler) handler = routes['/dashboard'];
 
     if (handler) {
+      // Always ensure the boot overlay is hidden before rendering any view
+      document.getElementById('loadingOverlay')?.classList.add('hidden');
       try {
         await handler(params);
       } catch (err) {

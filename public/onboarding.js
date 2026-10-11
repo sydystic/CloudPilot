@@ -10,8 +10,8 @@ const STEPS = [
     id: 'welcome',
     title: 'Welcome to CloudPilot ⚡',
     subtitle: 'Your command center for cloud automation',
-    icon: 'fas fa-microchip',
-    color: '#6366f1',
+    icon: 'fas fa-cloud',
+    color: '#0075de',
     description: 'CloudPilot lets you control AWS, GCP, and Azure automation workflows — no coding required. Let\'s get you set up in 2 minutes.',
     action: 'Get Started',
     skippable: false,
@@ -197,7 +197,7 @@ export function showWelcomeModal(userName = 'there') {
 
       <div class="welcome-content">
         <div class="welcome-logo">
-          <div class="welcome-logo-icon"><i class="fas fa-microchip"></i></div>
+          <div class="welcome-logo-icon"><img src="./assets/cloudpilot-mark.svg" alt="CloudPilot" style="width:32px;height:32px;"></div>
           <div class="welcome-logo-ring"></div>
         </div>
 

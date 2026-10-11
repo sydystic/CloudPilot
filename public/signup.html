@@ -4,116 +4,106 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sign Up | CloudPilot</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+<link rel="icon" type="image/svg+xml" href="./assets/cloudpilot-mark.svg">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" crossorigin="anonymous">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
-
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
   :root {
-    --primary: #6366f1;
-    --primary-dark: #4f46e5;
-    --primary-light: #818cf8;
-    --accent: #f43f5e;
-    --success: #10b981;
-    --bg-main: #f8fafc;
-    --card-white: #ffffff;
-    --text-main: #0f172a;
-    --text-secondary: #475569;
-    --text-muted: #64748b;
-    --border: #e2e8f0;
-    --radius-md: 12px;
-    --radius-lg: 16px;
-    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+    --primary: #0075de;
+    --primary-dark: #005bab;
+    --canvas-soft: #f6f5f4;
+    --surface: #ffffff;
+    --ink: #000000;
+    --ink-secondary: #31302e;
+    --ink-muted: #615d59;
+    --ink-faint: #a39e98;
+    --hairline: #e6e6e6;
+    --radius-xs: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+    --shadow-card:
+      rgba(0,0,0,0.01) 0 0.175px 1.041px,
+      rgba(0,0,0,0.02) 0 0.8px 2.925px,
+      rgba(0,0,0,0.027) 0 2.025px 7.847px,
+      rgba(0,0,0,0.04) 0 4px 18px;
   }
 
   body {
-    font-family: 'Manrope', sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    font-family: 'Inter', -apple-system, system-ui, sans-serif;
+    background: var(--canvas-soft);
     min-height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 20px;
-    position: relative;
-    overflow: hidden;
-  }
-
-  /* Animated Background */
-  body::before {
-    content: '';
-    position: absolute;
-    width: 200%;
-    height: 200%;
-    background: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
-    background-size: 50px 50px;
-    animation: float 20s linear infinite;
-    z-index: 0;
-  }
-
-  @keyframes float {
-    from { transform: translate(0, 0); }
-    to { transform: translate(-50px, -50px); }
+    padding: 24px 20px;
+    -webkit-font-smoothing: antialiased;
   }
 
   .signup-container {
     width: 100%;
     max-width: 420px;
-    position: relative;
-    z-index: 1;
+  }
+
+  /* ── Brand mark above card ── */
+  .brand-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+
+  .brand-logo {
+    width: 32px; height: 32px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .brand-logo img { width: 32px; height: 32px; display: block; }
+
+  .brand-wordmark {
+    font-size: 19px;
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: -0.4px;
   }
 
   .signup-card {
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(20px);
-    border-radius: var(--radius-lg);
-    padding: 2rem 2rem;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: var(--surface);
+    border-radius: var(--radius-xl);
+    padding: 32px;
+    border: 1px solid var(--hairline);
+    box-shadow: var(--shadow-card);
   }
 
-  .logo-section {
-    text-align: center;
-    margin-bottom: 1.5rem;
+  .card-heading {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: -0.2px;
+    margin-bottom: 4px;
   }
 
-  .logo-icon {
-    width: 50px;
-    height: 50px;
-    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
-    border-radius: 12px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 24px;
-    color: white;
-    margin-bottom: 0.75rem;
-    box-shadow: 0 10px 20px rgba(99, 102, 241, 0.3);
-  }
-
-  .logo-section h1 {
-    font-size: 24px;
-    font-weight: 800;
-    color: var(--text-main);
-    margin-bottom: 6px;
-  }
-
-  .logo-section p {
-    font-size: 13px;
-    color: var(--text-muted);
+  .card-subheading {
+    font-size: 14px;
+    color: var(--ink-muted);
+    margin-bottom: 24px;
   }
 
   .form-group {
-    margin-bottom: 1rem;
+    margin-bottom: 16px;
   }
 
   .form-label {
     display: block;
     font-size: 13px;
     font-weight: 600;
-    color: var(--text-main);
+    color: var(--ink-secondary);
     margin-bottom: 6px;
   }
 
@@ -123,95 +113,99 @@
 
   .input-icon {
     position: absolute;
-    left: 14px;
+    left: 12px;
     top: 50%;
     transform: translateY(-50%);
-    color: var(--text-muted);
-    font-size: 14px;
+    color: var(--ink-faint);
+    font-size: 13px;
+    pointer-events: none;
   }
 
   .form-input {
     width: 100%;
-    padding: 11px 14px 11px 40px;
-    border-radius: var(--radius-md);
-    border: 1px solid var(--border);
-    background: var(--card-white);
+    padding: 10px 12px 10px 36px;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--hairline);
+    background: var(--surface);
     font-family: inherit;
     font-size: 14px;
-    transition: all 0.2s;
+    color: var(--ink);
+    transition: border-color 0.15s, box-shadow 0.15s;
   }
 
   .form-input:focus {
     outline: none;
     border-color: var(--primary);
-    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.08);
+    box-shadow: 0 0 0 3px rgba(0, 117, 222, 0.08);
   }
+
+  .form-input::placeholder { color: var(--ink-faint); }
 
   .password-toggle {
     position: absolute;
-    right: 16px;
+    right: 12px;
     top: 50%;
     transform: translateY(-50%);
     background: none;
     border: none;
-    color: var(--text-muted);
+    color: var(--ink-faint);
     cursor: pointer;
-    font-size: 16px;
+    font-size: 14px;
     padding: 4px;
-    transition: color 0.2s;
+    transition: color 0.15s;
+    line-height: 1;
   }
 
-  .password-toggle:hover {
-    color: var(--primary);
-  }
+  .password-toggle:hover { color: var(--ink-muted); }
 
   .password-strength {
     margin-top: 8px;
-    height: 4px;
-    background: var(--border);
+    height: 3px;
+    background: var(--hairline);
     border-radius: 2px;
     overflow: hidden;
     display: none;
   }
 
-  .password-strength.show {
-    display: block;
-  }
+  .password-strength.show { display: block; }
 
   .strength-bar {
     height: 100%;
     width: 0;
-    transition: all 0.3s;
+    transition: width 0.3s ease, background 0.3s ease;
     border-radius: 2px;
   }
 
-  .strength-weak { width: 33%; background: #ef4444; }
-  .strength-medium { width: 66%; background: #f59e0b; }
-  .strength-strong { width: 100%; background: #10b981; }
+  .strength-weak { width: 33%; background: #dc2626; }
+  .strength-medium { width: 66%; background: #dd5b00; }
+  .strength-strong { width: 100%; background: #1aae39; }
 
   .password-hint {
     font-size: 11px;
-    color: var(--text-muted);
-    margin-top: 4px;
+    color: var(--ink-faint);
+    margin-top: 5px;
+    line-height: 1.3;
   }
 
   .checkbox-group {
     display: flex;
     align-items: flex-start;
     gap: 8px;
-    margin-bottom: 1.25rem;
+    margin-bottom: 20px;
+    margin-top: 4px;
   }
 
   .checkbox-group input[type="checkbox"] {
     margin-top: 2px;
-    width: 16px;
-    height: 16px;
+    accent-color: var(--primary);
+    width: 15px;
+    height: 15px;
     cursor: pointer;
   }
 
   .checkbox-group label {
     font-size: 12px;
-    color: var(--text-secondary);
+    color: var(--ink-secondary);
     cursor: pointer;
     line-height: 1.4;
   }
@@ -219,81 +213,73 @@
   .checkbox-group a {
     color: var(--primary);
     text-decoration: none;
-    font-weight: 600;
+    font-weight: 500;
   }
 
-  .checkbox-group a:hover {
-    text-decoration: underline;
-  }
+  .checkbox-group a:hover { text-decoration: underline; }
 
   .btn-primary {
     width: 100%;
     background: var(--primary);
-    color: white;
-    padding: 12px;
+    color: #fff;
+    padding: 11px 16px;
     border-radius: var(--radius-md);
-    font-weight: 700;
+    font-family: inherit;
+    font-weight: 600;
     font-size: 14px;
     border: none;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: background 0.15s;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
-    margin-bottom: 1rem;
+    margin-bottom: 16px;
   }
 
-  .btn-primary:hover:not(:disabled) {
-    background: var(--primary-dark);
-    transform: translateY(-1px);
-    box-shadow: 0 10px 20px rgba(99, 102, 241, 0.3);
-  }
-
-  .btn-primary:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
+  .btn-primary:hover:not(:disabled) { background: var(--primary-dark); }
+  .btn-primary:active:not(:disabled) { transform: scale(0.98); }
+  .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
 
   .divider {
     display: flex;
     align-items: center;
-    gap: 1rem;
-    margin: 1.25rem 0;
+    gap: 12px;
+    margin: 20px 0;
   }
 
-  .divider::before,
-  .divider::after {
+  .divider::before, .divider::after {
     content: '';
     flex: 1;
     height: 1px;
-    background: var(--border);
+    background: var(--hairline);
   }
 
   .divider span {
     font-size: 12px;
-    color: var(--text-muted);
-    font-weight: 600;
+    color: var(--ink-faint);
+    font-weight: 500;
+    white-space: nowrap;
   }
 
   .social-buttons {
     display: grid;
-    gap: 10px;
-    margin-bottom: 1.25rem;
+    gap: 8px;
+    margin-bottom: 20px;
   }
 
   .btn-social {
     width: 100%;
-    padding: 10px;
+    padding: 10px 14px;
     border-radius: var(--radius-md);
-    border: 1px solid var(--border);
-    background: var(--card-white);
-    color: var(--text-main);
+    border: 1px solid var(--hairline);
+    background: var(--surface);
+    color: var(--ink-secondary);
     font-family: inherit;
     font-size: 13px;
-    font-weight: 600;
+    font-weight: 500;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: background 0.15s, border-color 0.15s;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -301,107 +287,84 @@
   }
 
   .btn-social:hover {
-    background: var(--bg-main);
-    border-color: var(--primary);
-    transform: translateY(-1px);
-  }
-
-  .btn-social i {
-    font-size: 16px;
+    background: var(--canvas-soft);
+    border-color: #ccc;
   }
 
   .login-link {
     text-align: center;
     font-size: 13px;
-    color: var(--text-secondary);
+    color: var(--ink-muted);
   }
 
   .login-link a {
     color: var(--primary);
     text-decoration: none;
-    font-weight: 700;
-    transition: color 0.2s;
+    font-weight: 600;
   }
 
-  .login-link a:hover {
-    color: var(--primary-dark);
-  }
+  .login-link a:hover { color: var(--primary-dark); }
 
   .alert {
     padding: 10px 14px;
     border-radius: var(--radius-md);
     font-size: 13px;
-    margin-bottom: 1.25rem;
-    display: flex;
+    margin-bottom: 16px;
+    display: none;
     align-items: center;
     gap: 8px;
-    display: none;
+    line-height: 1.4;
   }
 
-  .alert.show {
-    display: flex;
-  }
+  .alert.show { display: flex; }
 
   .alert-error {
-    background: rgba(239, 68, 68, 0.1);
+    background: rgba(239, 68, 68, 0.06);
     color: #dc2626;
     border: 1px solid rgba(239, 68, 68, 0.2);
   }
 
   .alert-success {
-    background: rgba(16, 185, 129, 0.1);
-    color: #059669;
-    border: 1px solid rgba(16, 185, 129, 0.2);
+    background: rgba(26, 174, 57, 0.06);
+    color: #1aae39;
+    border: 1px solid rgba(26, 174, 57, 0.2);
   }
 
   .alert-info {
-    background: rgba(59, 130, 246, 0.1);
-    color: #2563eb;
-    border: 1px solid rgba(59, 130, 246, 0.2);
+    background: rgba(0, 117, 222, 0.06);
+    color: var(--primary);
+    border: 1px solid rgba(0, 117, 222, 0.2);
   }
 
   .spinner {
-    width: 16px;
-    height: 16px;
-    border: 2px solid rgba(255, 255, 255, 0.3);
+    width: 15px; height: 15px;
+    border: 2px solid rgba(255,255,255,0.35);
     border-top-color: white;
     border-radius: 50%;
-    animation: spin 0.8s linear infinite;
+    animation: spin 0.75s linear infinite;
+    flex-shrink: 0;
   }
 
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
+  @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* Responsive */
   @media (max-width: 480px) {
-    .signup-card {
-      padding: 1.5rem 1.25rem;
-    }
-
-    .logo-section h1 {
-      font-size: 22px;
-    }
-
-    .logo-icon {
-      width: 45px;
-      height: 45px;
-      font-size: 22px;
-    }
+    .signup-card { padding: 24px 20px; }
   }
 </style>
 </head>
 <body>
 
 <div class="signup-container">
-  <div class="signup-card">
-    <div class="logo-section">
-      <div class="logo-icon">
-        <i class="fas fa-microchip"></i>
-      </div>
-      <h1>Create Account</h1>
-      <p>Start automating with CloudPilot today</p>
+  <div class="brand-header">
+    <div class="brand-logo">
+      <img src="./assets/cloudpilot-mark.svg" alt="CloudPilot">
     </div>
+    <span class="brand-wordmark">CloudPilot</span>
+  </div>
+
+  <div class="signup-card">
+    <h1 class="card-heading">Create Account</h1>
+    <p class="card-subheading">Start automating with CloudPilot today</p>
 
     <div id="alertBox" class="alert"></div>
 
@@ -511,17 +474,27 @@
 
 <script type="module">
   import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+  import { getConfig } from './config.js';
 
-  // IMPORTANT: Replace with your actual Supabase credentials
-  const SUPABASE_URL = 'https://pzrvxyhxfwagexrbisfa.supabase.co';
-  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6cnZ4eWh4ZndhZ2V4cmJpc2ZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA5NDE4NTUsImV4cCI6MjA4NjUxNzg1NX0.egQt4OZ7qKzXepeSM0pf3LZ8N_Qh4AhT8Mu00NSYEA0';
+  let supabase;
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  try {
+    const config = await getConfig();
+    if (config.supabase?.url && config.supabase?.anonKey) {
+      supabase = createClient(config.supabase.url, config.supabase.anonKey);
+      window.supabase = supabase;
 
-  // Check if already logged in
-  const { data: { session } } = await supabase.auth.getSession();
-  if (session) {
-    window.location.href = 'index.html';
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        window.location.href = 'index.html';
+      }
+    } else if (config.demoMode) {
+      showAlert('Demo mode active.', 'info');
+    } else {
+      showAlert('Supabase URL or Anon Key is missing. Check .env file.', 'error');
+    }
+  } catch (err) {
+    showAlert('Configuration error: ' + err.message, 'error');
   }
 
   // Password strength checker
@@ -565,7 +538,6 @@
     const submitBtn = document.getElementById('submitBtn');
     const btnText = document.getElementById('btnText');
 
-    // Validation
     if (!terms) {
       showAlert('Please accept the Terms of Service', 'error');
       return;
@@ -581,11 +553,20 @@
       return;
     }
 
-    // Show loading state
     submitBtn.disabled = true;
     btnText.innerHTML = '<div class="spinner"></div><span>Creating account...</span>';
 
     try {
+      if (!supabase) {
+        const config = await getConfig().catch(() => ({ demoMode: true }));
+        if (config.demoMode) {
+          showAlert('Account created in Demo Mode! Redirecting to login...', 'success');
+          setTimeout(() => { window.location.href = 'login.html'; }, 1500);
+          return;
+        }
+        throw new Error('Supabase client not initialized. Check server configuration.');
+      }
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -598,16 +579,14 @@
 
       if (error) throw error;
 
-      showAlert('Account created! Please check your email to verify your account.', 'success');
+      showAlert('Account created! Please check your email to verify your account or sign in.', 'success');
 
-      // Reset form
       document.getElementById('signupForm').reset();
       document.getElementById('passwordStrength').classList.remove('show');
 
-      // Redirect after 3 seconds
       setTimeout(() => {
         window.location.href = 'login.html';
-      }, 3000);
+      }, 2000);
 
     } catch (error) {
       showAlert(error.message, 'error');
@@ -635,6 +614,7 @@
   // Social signup handlers
   window.handleGoogleSignup = async function() {
     try {
+      if (!supabase) throw new Error('Supabase is not configured on server');
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -649,6 +629,7 @@
 
   window.handleGithubSignup = async function() {
     try {
+      if (!supabase) throw new Error('Supabase is not configured on server');
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'github',
         options: {

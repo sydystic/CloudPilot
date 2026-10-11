@@ -4,13 +4,15 @@ import { n8nRequest, getN8nHeaders } from '../utils/n8n.js';
 import { getSupabaseAdmin } from '../utils/supabase.js';
 import { requireAuth } from '../middleware/auth.js';
 import { DEMO_WORKFLOWS, DEMO_EXECUTIONS } from '../utils/demo.js';
+import { validateParamId } from '../middleware/validate.js';
+import { workflowRunLimiter } from '../middleware/rateLimiter.js';
 import fetch from 'node-fetch';
 
 const router = Router();
 router.use(requireAuth);
 
 function getN8nBaseUrl() {
-  return (process.env.N8N_URL || 'http://localhost:5678').replace(/\/$/, '');
+  return (process.env.N8N_URL || 'http://localhost:5680').replace(/\/$/, '');
 }
 
 // ─────────────────────────────────────────────
@@ -25,7 +27,7 @@ router.get('/', async (req, res) => {
 // ─────────────────────────────────────────────
 // GET /api/workflows/:id
 // ─────────────────────────────────────────────
-router.get('/:id', async (req, res) => {
+router.get('/:id', validateParamId('id'), async (req, res) => {
   if (process.env.DEMO_MODE === 'true') {
     const wf = DEMO_WORKFLOWS.find(w => String(w.id) === req.params.id);
     return wf ? res.json(wf) : res.status(404).json({ error: 'Not found' });
@@ -53,7 +55,7 @@ router.post('/', async (req, res) => {
 // ─────────────────────────────────────────────
 // DELETE /api/workflows/:id
 // ─────────────────────────────────────────────
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', validateParamId('id'), async (req, res) => {
   if (process.env.DEMO_MODE === 'true') return res.json({ success: true });
   try {
     await n8nRequest(`/workflows/${req.params.id}`, 'DELETE');
@@ -70,7 +72,7 @@ router.delete('/:id', async (req, res) => {
 // ─────────────────────────────────────────────
 // POST /api/workflows/:id/toggle
 // ─────────────────────────────────────────────
-router.post('/:id/toggle', async (req, res) => {
+router.post('/:id/toggle', validateParamId('id'), async (req, res) => {
   const { active } = req.body;
   const workflowId = req.params.id;
   if (process.env.DEMO_MODE === 'true') return res.json({ success: true, id: workflowId, active });
@@ -102,7 +104,7 @@ router.post('/:id/toggle', async (req, res) => {
 // Do NOT wait for polling — that caused ERR_CONNECTION_RESET.
 // Polling + DB writes happen in background after response is sent.
 // ─────────────────────────────────────────────
-router.post('/:id/run', async (req, res) => {
+router.post('/:id/run', workflowRunLimiter, validateParamId('id'), async (req, res) => {
   const workflowId = req.params.id;
   const userId = req.user.id;
 

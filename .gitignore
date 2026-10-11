@@ -1,12 +1,12 @@
 # Environment variables
 .env
 .env.local
+.env.docker
 .env.production
 .env.*.local
 
 # Dependencies
 node_modules/
-package-lock.json
 yarn.lock
 
 # Logs
@@ -35,3 +35,4 @@ build/
 # Temporary files
 tmp/
 temp/
+scratch/

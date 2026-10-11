@@ -4,42 +4,105 @@ CloudPilot is a cloud workflow automation platform designed for managing and exe
 
 ---
 
-## Features
+## 🏗️ Architecture
 
-- User authentication with Supabase Auth
-- Workflow creation and execution
-- Real-time execution monitoring
-- Workflow template marketplace
-- Secure encrypted credential management
-- Multi-cloud support for AWS, GCP, Azure, and Kubernetes
-- Execution history and timeline tracking
-- Responsive dashboard UI
-- Search and filter functionality
-- Settings and profile management
+```
+┌───────────────┐
+│    Browser    │
+└───────┬───────┘
+        │
+        ▼
+┌───────────────┐
+│  CloudPilot   │  Node/Express Host Process (Port 4000)
+│ Node/Express  │  N8N_URL=http://localhost:5678
+└──────┬────────┘
+       │
+┌──────┴──────────────┐
+▼                     ▼
+┌─────────────┐   ┌─────────────┐
+│  Supabase   │   │     n8n     │  Docker Container (Port 5678)
+│ PostgreSQL  │   │   Docker    │
+└─────────────┘   └──────┬──────┘
+                         │
+                         ▼
+                  ┌─────────────┐
+                  │   n8n DB    │  Docker Container (Internal n8n state only)
+                  │ PostgreSQL  │
+                  └─────────────┘
+```
+
+- **Application Database**: Supabase (Cloud PostgreSQL) for `user_workflows`, `user_credentials`, `executions`, `audit_logs`, `profiles`, `workflow_templates`.
+- **Engine Database**: PostgreSQL Docker container (`cloudpilot-n8n-db`) dedicated to n8n engine state.
 
 ---
 
-## Tech Stack
+## 🚀 Getting Started
 
-Frontend:
-- HTML5
-- CSS3
-- Vanilla JavaScript
+### 1. Environment Configuration
+Copy `.env.example` to `.env`:
+```bash
+cp .env.example .env
+```
+Generate an encryption key:
+```bash
+npm run gen-key
+```
 
-Backend:
-- Node.js
-- Express.js
+### 2. Docker + n8n Setup
+Start the n8n container and PostgreSQL database:
+```bash
+docker compose up -d
+```
+Check container status:
+```bash
+docker compose ps
+```
 
-Database:
-- Supabase (PostgreSQL)
+Open [http://localhost:5678](http://localhost:5678) in your browser:
+1. Complete n8n initial owner setup.
+2. Go to **Settings** $\rightarrow$ **n8n API** $\rightarrow$ **Create API Key**.
+3. Add `N8N_API_KEY=your_key_here` into your `.env` file.
 
-Workflow Engine:
-- n8n
+### 3. Database Migration & Template Seeding
+Apply `supabase/migrations/001_initial_schema.sql` in your Supabase SQL Editor.
+Seed template marketplace workflows:
+```bash
+npm run seed
+```
 
-Authentication:
-- Supabase Auth
+### 4. Run CloudPilot
+```bash
+npm run dev
+```
+Open [http://localhost:4000](http://localhost:4000) in your browser.
 
-Security:
-- AES-256-GCM encryption
-- JWT authentication
-- Row-Level Security (RLS)
+---
+
+## 🛠️ Docker Management Commands
+
+- **Start containers**: `docker compose up -d`
+- **View container status**: `docker compose ps`
+- **View n8n logs**: `docker compose logs -f n8n`
+- **Stop containers (preserve data)**: `docker compose down`
+- **Restart containers**: `docker compose restart`
+
+> ⚠️ **Note**: Do not use `docker compose down -v` unless you intend to erase persistent n8n volume data.
+
+---
+
+## 🔍 Diagnostics
+
+- Health check: `http://localhost:4000/api/health`
+- n8n Diagnostics: `http://localhost:4000/api/n8n-debug`
+
+For detailed Docker configuration guidelines, see [`docs/DOCKER_SETUP.md`](docs/DOCKER_SETUP.md).
+
+---
+
+## ⚡ Tech Stack
+
+- **Frontend**: HTML5, Vanilla CSS, Modern JavaScript (ESM)
+- **Backend**: Node.js, Express.js
+- **Database**: Supabase (PostgreSQL) + RLS Policies
+- **Workflow Engine**: n8n (Docker container)
+- **Security**: AES-256-GCM encryption for credentials, Supabase Auth
